@@ -21,7 +21,7 @@ import os
 import sys
 from logging.handlers import RotatingFileHandler
 
-from 1Guard-ai import const
+from oneguardai import const
 
 
 # Custom logging handler to count warnings, errors and criticals.
