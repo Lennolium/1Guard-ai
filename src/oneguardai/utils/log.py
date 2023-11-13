@@ -41,7 +41,7 @@ class LogCount(logging.Handler):
             self.criticals += 1
 
 
-def create_logger(counter):
+def create(counter):
     # Prepare directory for log file.
     os.makedirs(os.path.dirname(const.LOG_FILE), exist_ok=True)
 
@@ -53,8 +53,11 @@ def create_logger(counter):
             const.LOG_FILE, backupCount=5, maxBytes=2000000
             )
 
-    # Stdout: Print log messages to stdout (only for testing).
+    # Stdout: Print log messages to stdout.
     stdout_handler = logging.StreamHandler(stream=sys.stdout)
+
+    # Syslog: Log messages to system log.
+    syslog_handler = logging.StreamHandler(stream=sys.stderr)
 
     # Define format (level, timestamp, filename, line number, message).
     fmt = logging.Formatter(
@@ -71,32 +74,9 @@ def create_logger(counter):
     logger.addHandler(counter)
     logger.addHandler(file_handler)
     logger.addHandler(stdout_handler)
+    # logger.addHandler(syslog_handler)
 
     # Set the log level to default (INFO).
     logger.setLevel(logging.INFO)
 
     return logger
-
-
-def add_handler(logger_obj, dest):
-    if dest == "syslog":
-        # Syslog/Console: Log to console on Linux.
-        syslog_handler = logging.StreamHandler(stream=sys.stderr)
-
-        logger_obj.addHandler(syslog_handler)
-
-    elif dest == "stdout":
-        # Stdout: Print log messages to stdout.
-        stdout_handler = logging.StreamHandler(stream=sys.stdout)
-        # Define format (level, timestamp, filename, line number, message).
-        fmt = logging.Formatter(
-                fmt="%(levelname)s | %(asctime)s | %(filename)s:%(lineno)s | "
-                    "%("
-                    "message)s",
-                datefmt="%Y-%m-%dT%H:%M:%SZ",
-                )
-        stdout_handler.setFormatter(fmt)
-
-        logger_obj.addHandler(stdout_handler)
-
-    return logger_obj
