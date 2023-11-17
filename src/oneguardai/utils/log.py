@@ -57,7 +57,7 @@ def create(counter):
     stdout_handler = logging.StreamHandler(stream=sys.stdout)
 
     # Syslog: Log messages to system log.
-    syslog_handler = logging.StreamHandler(stream=sys.stderr)
+    # syslog_handler = logging.StreamHandler(stream=sys.stderr)
 
     # Define format (level, timestamp, filename, line number, message).
     fmt = logging.Formatter(

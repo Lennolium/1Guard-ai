@@ -33,7 +33,7 @@ def get_whois_info(domain):
 
 
 if __name__ == "__main__":
-    website_domain = "google.com"
+    website_domain = "chicladdy.com"
     whois_info = get_whois_info(website_domain)
 
     if whois_info:

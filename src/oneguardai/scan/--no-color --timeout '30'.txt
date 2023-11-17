@@ -1,0 +1,10 @@
+https://www.cnet.com/profiles/--no-color --timeout '30'/
+https://www.eyeem.com/u/--no-color --timeout '30'
+https://www.rusfootball.info/user/--no-color --timeout '30'/
+https://lolchess.gg/profile/na/--no-color --timeout '30'
+https://polymart.org/user/--no-color --timeout '30'
+https://slides.com/--no-color --timeout '30'
+https://virgool.io/@--no-color --timeout '30'
+https://lab.pentestit.ru/profile/--no-color --timeout '30'
+https://satsis.info/user/--no-color --timeout '30'
+Total Websites Username Detected On : 9
