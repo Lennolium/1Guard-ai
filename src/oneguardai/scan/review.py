@@ -342,9 +342,9 @@ def social2(domain: str) -> dict or None:
 
 
 # social("chicladdy.com")
-social2("chicladdy.com")
+# social2("chicladdy.com")
 
-if __name__ == "__main__x":
+if __name__ == "__main__":
     trust = trustpilot("chicladdy.com")
     if trust:
         print("Trustpilot:", trust)

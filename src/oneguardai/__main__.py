@@ -105,6 +105,11 @@ def main():
     # All startup checks finished without critical errors.
     LOGGER.info("Startup checks done and 1Guard-ai ready to run!")
 
+    from scan import review
+
+    result = review.scamadviser("chicladdy.com")
+    print(result)
+
 
 if __name__ == "__main__":
     main()
