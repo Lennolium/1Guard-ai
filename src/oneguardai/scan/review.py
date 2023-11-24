@@ -17,12 +17,15 @@ __status__ = "Prototype"
 
 # Imports.
 import logging
+import re
 from urllib.parse import urlparse
 import subprocess
 
 import requests
 from bs4 import BeautifulSoup
 from importlib import import_module
+import http.client
+from urllib.parse import quote
 
 from oneguardai import const
 
@@ -71,8 +74,6 @@ def virustotal(domain: str) -> dict or None:
                      )
         return None
 
-
-# TRUSTED SHOPS!
 
 def scamadviser(domain: str) -> dict or None:
     """
@@ -161,6 +162,9 @@ def scamadviser(domain: str) -> dict or None:
 def trustpilot(domain: str) -> dict[float, int] or None:
     """
     Get the trustpilot reviews for the specified domain.
+
+    We need to scrape the website because TrustPilot does only provide
+    a paid API (200 USD per month).
     """
 
     url = f"https://trustpilot.com/review/{domain}"
@@ -208,11 +212,61 @@ def trustpilot(domain: str) -> dict[float, int] or None:
         return None
 
 
-# TODO: Move somewhere else!
-def bypass_cloudflare(url):
-    import http.client
-    from urllib.parse import quote
+def getsafeonline(domain: str) -> dict or None:
+    """
+    Get the getsafeonline check for the specified domain.
+    """
 
+    url = f"https://check.getsafeonline.org/check/{domain}"
+
+    try:
+        response = requests.get(url)
+
+        if response.status_code != 200:
+            LOGGER.error("Could not fetch getsafeonline rating. Response "
+                         f"status code: {response.status_code}."
+                         )
+            return None
+
+        soup = BeautifulSoup(response.text, "html.parser")
+
+        results = {}
+
+        review_sections = soup.find_all('div',
+                                        class_='flex flex-col gap-4 '
+                                               'md:flex-row'
+                                        )
+
+        for section in review_sections:
+            a_element = section.find("a", class_="text-black")
+            if a_element:
+                source_name = a_element.text.strip()[: -1]
+
+            img_element = section.find("img")
+            if img_element:
+                
+                alt_text = img_element.get("alt", "").lower()
+
+                if alt_text == "source-positive":
+                    results[source_name] = True
+
+                elif alt_text == "source-negative":
+                    results[source_name] = False
+
+                else:
+                    results[source_name] = None
+
+        return results
+
+    except Exception as e:
+        LOGGER.error("An error occurred while fetching the getsafeonline "
+                     f"checks: {str(e)}."
+                     )
+        return None
+
+
+# TODO: Move somewhere else!
+def bypass_cloudflare(url: str) -> BeautifulSoup or None:
     encoded_url = quote(url, safe="")
 
     conn = http.client.HTTPSConnection("api.scrapingant.com")
@@ -295,7 +349,6 @@ def social(domain: str) -> dict or None:
                                                )["detected"]
 
         for item in result:
-            print("ITEMS:", item)
 
             # 'https://my.shop.com/buy/this' -> 'shop'.
             domain_name = urlparse(item["link"]).netloc.split('.')[-2]
@@ -314,25 +367,38 @@ def social(domain: str) -> dict or None:
 
 
 def social2(domain: str) -> dict or None:
-    # Search for profiles with url.tld and url (shop.com and shop).
     domain_strip = '.'.join(domain.split('.')[:-1])
 
     sherlock_local_path = f"{const.APP_PATH}/utils/sherlock/sherlock.py"
     opt_arguments = "--no-color"
     timeout_arg = "--timeout"
     timeout_val = "20"
+    output_arg = "--output"
+    output_val = ""
 
-    results = {}
+    results = {"social_count": 0, "social": []}
 
     try:
         result = subprocess.run(["python3", sherlock_local_path,
                                  domain_strip, opt_arguments, timeout_arg,
-                                 timeout_val],
+                                 timeout_val, output_arg, output_val],
                                 capture_output=True,
                                 text=True, check=True, timeout=300
                                 )
 
-        print(result.stdout)
+        # print(result.stdout)
+
+        # Regular expression (only name of social media platform).
+        pattern = re.compile(r"\[\+\] (\w+):")
+
+        matches = pattern.findall(result.stdout)
+
+        for match in matches:
+            results["social_count"] += 1
+
+            results["social"].append(match)
+
+        return results
 
     except subprocess.CalledProcessError as e:
         LOGGER.error("An error occurred while fetching the social media "
@@ -341,18 +407,28 @@ def social2(domain: str) -> dict or None:
         return None
 
 
-# social("chicladdy.com")
-# social2("chicladdy.com")
-
 if __name__ == "__main__":
-    trust = trustpilot("chicladdy.com")
-    if trust:
-        print("Trustpilot:", trust)
+    # Find social media profiles (takes a 30-60 seconds).
+    # soc = social("chicladdy.com")
+    # if soc:
+    #     print("Social:", soc)
 
-    scam = scamadviser("chicladdy.com")
-    if scam:
-        print("Scamadviser:", scam)
+    soc2 = social2("chicladdy.com")
+    if soc2:
+        print("Social2:", soc2)
 
-    virus = virustotal("chicladdy.com")
-    if virus:
-        print("Virustotal:", virus)
+    # trust = trustpilot("chicladdy.com")
+    # if trust:
+    #     print("Trustpilot:", trust)
+    #
+    # scam = scamadviser("chicladdy.com")
+    # if scam:
+    #     print("Scamadviser:", scam)
+    #
+    # virus = virustotal("chicladdy.com")
+    # if virus:
+    #     print("Virustotal:", virus)
+
+    getsafe = getsafeonline("chicladdy.com")
+    if getsafe:
+        print("Getsafeonline:", getsafe)
