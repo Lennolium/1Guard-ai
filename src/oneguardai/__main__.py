@@ -52,6 +52,13 @@ def exit_handler(signum=None, frame=None, error=False):
         code = 0
         LOGGER.info("Exiting the application properly ...")
 
+    LOGGER.info("---------------- Exceptions: ---------------")
+    LOGGER.info(f"Warnings: {LOG_COUNT.warnings}, Errors: "
+                f"{LOG_COUNT.errors}, Criticals: "
+                f"{LOG_COUNT.criticals}"
+                )
+    LOGGER.info("--------------------------------------------")
+
     sys.exit(code)
 
 
@@ -109,6 +116,8 @@ def main():
 
     result = review.scamadviser("chicladdy.com")
     print(result)
+
+    exit_handler(error=False)
 
 
 if __name__ == "__main__":
