@@ -148,6 +148,10 @@ def scamadviser(domain: str) -> dict:
         else:
             website_speed_value = None
 
+        # Convert speed values (str) to int.
+        if website_speed_value:
+            website_speed_value = const.VELOCITY_MAP[website_speed_value]
+
         # SSL certificate validation.
         ssl_cert_div = soup.find("div", {"class": "block__col"},
                                  string="SSL certificate valid"

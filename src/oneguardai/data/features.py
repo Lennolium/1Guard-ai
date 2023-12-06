@@ -69,9 +69,9 @@ class WebsiteFeatures:
             # WHOIS features.
             "WHOIS_CREATED_MONTHS", "WHOIS_LAST_UPDATED_MONTHS",
             "WHOIS_EXPIRES_IN_MONTHS", "WHOIS_DNSSEC", "WHOIS_COUNTRY",
-            "WHOIS_PRIVACY"
+            "WHOIS_PRIVACY",
             # Social media features (Only number of accounts yet).
-            "ALL_ACCOUNTS", "SOCIAL_ACCOUNTS", "SOCIAL_ACCOUNTS2"
+            # "ALL_ACCOUNTS", "SOCIAL_ACCOUNTS", "SOCIAL_ACCOUNTS2"
             ]
 
     def __init__(self, domain: str):
@@ -293,9 +293,22 @@ class WebsiteFeatures:
         end_time = time.perf_counter()
         elapsed_time = end_time - start_time
 
-        for feature in self.features:
+        for index, feature in enumerate(self.features):
             if feature == "NaN":
                 self.features_count -= 1
+
+            # Replace None or empty string with "NaN".
+            if feature is None or feature == "":
+
+                # Save modified feature back into list.
+                self.features_count -= 1
+                self.features[index] = "NaN"
+
+            # Convert bool to int (True = 1, False = 0).
+            elif feature in [True, False]:
+
+                # Save modified feature back into list.
+                self.features[index] = feature * 1
 
         LOGGER.info(
                 f"Features (without NaN): {self.features_count}/"
@@ -307,7 +320,10 @@ class WebsiteFeatures:
 
 
 if __name__ == "__main__":
-    obj = WebsiteFeatures("chicladdy.com")
+    # obj = WebsiteFeatures("chicladdy.com")
+
+    obj = WebsiteFeatures("11trikots.com")
+
     obj.feature_extraction()
     print("NAMES:", obj.features_names)
     print("FEATURES:", obj.features)

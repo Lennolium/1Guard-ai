@@ -19,6 +19,7 @@ __status__ = "Prototype"
 import logging
 from datetime import date, datetime
 
+import country_converter
 import whois
 
 # Child logger.
@@ -63,27 +64,50 @@ def whois_info(domain: str) -> dict:
         # Check if domain is using DNSSEC.
         if whois_full["dnssec"] == "unsigned":
             dnssec = False
+
+        elif isinstance(whois_full["dnssec"], list):
+            dnssec = whois_full["dnssec"][0]
+            if dnssec == "unsigned":
+                dnssec = False
         else:
             dnssec = True
 
         # Get the country of the domain.
         country = whois_full["country"]
 
+        # Convert country to ISO 3166-1 alpha-2 code if it not already.
+        if len(country) != 2:
+            country = country_converter.convert(names=country, to='ISO2',
+                                                not_found="NaN"
+                                                )
+
         # Check if domain privacy is enabled.
         privacy_names = ["private", "whoisguard", "privacy", "protected",
-                         "redacted", "anonymized", "anonymised", "null"]
+                         "redacted", "anonymized", "anonymised", "null",
+                         "personal data", "personal information",
+                         "applicable laws", "disclosed", "restricted", ]
 
         if isinstance(whois_full["name"], list):
             whois_name = whois_full["name"][0]
-
         elif whois_full["name"] is None:
             whois_name = "null"
         else:
             whois_name = whois_full["name"]
 
+        if isinstance(whois_full["org"], list):
+            whois_org = whois_full["org"][0]
+        elif whois_full["org"] is None:
+            whois_org = "null"
+        else:
+            whois_org = whois_full["org"]
+
         privacy = False
         for priv in privacy_names:
             if priv in whois_name.lower():
+                privacy = True
+                break
+
+            elif priv in whois_org.lower():
                 privacy = True
                 break
 
@@ -103,7 +127,7 @@ def whois_info(domain: str) -> dict:
 
 
 if __name__ == "__main__":
-    website_domain = "0n-line.tv"
+    website_domain = "11trikots.com"
     whois_info = whois_info(website_domain)
 
     if whois_info:
