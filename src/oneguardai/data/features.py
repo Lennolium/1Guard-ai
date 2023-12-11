@@ -327,3 +327,5 @@ if __name__ == "__main__":
     obj.feature_extraction()
     print("NAMES:", obj.features_names)
     print("FEATURES:", obj.features)
+
+    # TODO: features: emoji/unicodes, homographen,

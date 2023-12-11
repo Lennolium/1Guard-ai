@@ -43,39 +43,24 @@ df["WHOIS_COUNTRY"] = df["WHOIS_COUNTRY"].replace(const.COUNTRY_MAP)
 # Convert NaN values to -1 (or maybe 0.5?).
 df = df.fillna(0.5)
 
-# Convert True/False values to 1/0 (already done while scraping).
-df.replace(True, 1, inplace=True)
-df.replace(False, 0, inplace=True)
-df.replace("True", 1, inplace=True)
-df.replace("False", 0, inplace=True)
-df.replace("None", -1, inplace=True)
-df.replace("NaN", -1, inplace=True)
-df.replace(np.nan, -1, inplace=True)
-
 # Drop the first column (domains).
 df = df.iloc[:, 1:]
 
-df[["UV_DETECTIONS"]] = df[["UV_DETECTIONS"]].apply(pd.to_numeric)
-
-for col in df["UV_DETECTIONS"]:
-    print(type(col))
-
-# print(df.head())
-print("------" * 10)
-print(df[["UV_DETECTIONS"]])
-
 df = df.drop("SA_WEBSITE_SPEED", axis=1)
-df = df.drop("WHOIS_COUNTRY", axis=1)
+# df = df.drop("WHOIS_COUNTRY", axis=1)
 
-# exit(0)
+# df["WHOIS_COUNTRY"] = df["WHOIS_COUNTRY"].astype(int)
+df = df.apply(pd.to_numeric)
+df = pd.DataFrame(df)
+
+for col in df["WHOIS_COUNTRY"]:
+    print(col, type(col))
 
 # CORRELATION MATRIX:
+df = df.apply(pd.to_numeric)
 # numerical_df = df.select_dtypes(include=[np.number])
 # correlation_matrix = numerical_df.corr()
-df = df.apply(pd.to_numeric)
-
 correlation_matrix = df.corr()
-
 print("MEDIAN:", correlation_matrix["TRUST"].sort_values(
         ascending=False
         )

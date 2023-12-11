@@ -2,3 +2,7 @@ black==23.11.0
 bandit==1.7.5
 pytest==7.4.3
 social-analyzer==0.45
+beautifulsoup4==4.12.2
+requests==2.31.0
+python-whois==0.8.0
+pyOpenSSL==23.3.0

@@ -67,9 +67,7 @@ TIMEOUT = 10
 # PROXYS = {"http": free_proxy}
 
 # API settings and keys. TODO: change to env variables!
-API_KEY_VT = ""
-API_KEY_PR = ""
-API_KEY_SCRAPANT = ""
+
 
 COUNTRY_MAP = {"NaN": "NaN", "AD": 0, "AE": 1, "AF": 2, "AG": 3, "AI": 4,
                "AL": 5, "AM": 6, "AN": 7, "AO": 8, "AQ": 9, "AR": 10, "AS": 11,

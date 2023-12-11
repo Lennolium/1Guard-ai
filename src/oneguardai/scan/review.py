@@ -15,8 +15,8 @@ __build__ = "2023.1"
 __date__ = "2023-11-07"
 __status__ = "Prototype"
 
-import json
 # Imports.
+import json
 import logging
 import re
 import time
@@ -580,7 +580,7 @@ if __name__ == "__main__":
     # BAD EXAMPLE:
     # https://www.aboutsafetytool.com/term-and-conditions/
 
-    print(virustotal2("chicladdy.com"))
+    print(virustotal("chicladdy.com"))
     exit(0)
 
     # PERFORMANCE TESTING (ScamAdviser and GetSafeOnline are slow):

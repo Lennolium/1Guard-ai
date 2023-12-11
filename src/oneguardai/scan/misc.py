@@ -117,11 +117,60 @@ def forwarding(response: requests.Response) -> bool:
     name.
 
     :param response: requests.Response: Pass in the response object
-    :return: True if the domain is not forwarding
+    :return: True if the domain is forwarding
     """
 
     if len(response.history) >= 1:
+        return True
+
+    else:
+        return False
+
+
+def impressum_check(soup: BeautifulSoup) -> bool:
+    # print(soup)
+
+    try:
+
+        result = soup.find('a', string='Datenschutz')["href"]
+
+    except:
+        try:
+            result = soup.find('a', string='Privacy')["href"]
+
+        except:
+            return False
+
+        return False
+
+    link = f"https://www.11trikots.com{result}"
+
+    request = requests.get(link)
+    soup2 = BeautifulSoup(request.text, "html.parser")
+
+    datenschutz_abschnitt = soup2.find('h1', {'id': 'privacyDefaultHeading'})
+
+    if datenschutz_abschnitt:
+        datenschutz_text = ""
+        next_element = datenschutz_abschnitt.find_next('div')
+        while next_element and (
+                next_element.name != 'h3' or next_element.name != 'div'):
+            datenschutz_text += str(next_element).strip()
+            next_element = next_element.find_next_sibling()
+
+    if datenschutz_text is None:
         return False
 
     else:
-        return True
+        return {"link": link, "text": datenschutz_text}
+
+
+if __name__ == "__main__":
+    request = requests.get(
+            "https://plugins.jetbrains.com/plugin/9473-texify-idea/versions"
+            )
+    soup = BeautifulSoup(request.text, "html.parser")
+
+    result = impressum_check(soup)
+
+    print(result)
