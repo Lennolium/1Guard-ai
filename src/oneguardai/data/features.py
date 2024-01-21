@@ -41,8 +41,9 @@ else:
 class WebsiteFeatures:
     features_names = [
             # Domain specific features.
-            "DOMAIN_LENGTH", "SUBDOMAIN", "PORT", "AT_SYMBOL",
-            "PRE_SUFFIX", "IP_ADDRESS", "SHORTENING", "REDIRECTING",
+            "DOMAIN_LENGTH", "SUBDOMAIN", "PORT", "AT_SYMBOL", "PRE_SUFFIX",
+            "HTTPS_HOSTNAME", "IP_ADDRESS", "SHORTENING", "REDIRECTING",
+            "SUSPICIOUS_TLD",
             # Security and HTML-Header features.
             "HTTPS", "HTTPS_WILDCARD", "HSTS", "CSP",
             "X_CONTENT_TYPE_OPTIONS", "X_FRAME_OPTIONS", "SECURE_COOKIES",
@@ -66,6 +67,8 @@ class WebsiteFeatures:
             # Review sites features: URLVoid.
             "UV_DETECTIONS", "UV_SITES_SAME_IP",
             "UV_SITES_SAME_IP_DETECTIONS",
+            # Review sites features: TrustedShops.
+            "TS_TRUSTED", "TS_RATING", "TS_REVIEWS_COUNT",
             # WHOIS features.
             "WHOIS_CREATED_MONTHS", "WHOIS_LAST_UPDATED_MONTHS",
             "WHOIS_EXPIRES_IN_MONTHS", "WHOIS_DNSSEC", "WHOIS_COUNTRY",
@@ -153,9 +156,11 @@ class WebsiteFeatures:
         self.features.append(domain_url.port(self.domain))
         self.features.append(domain_url.at_symbol(self.domain))
         self.features.append(domain_url.pre_suffix(self.domain))
+        self.features.append(domain_url.https_hostname(self.domain))
         self.features.append(domain_url.ip_addr(self.domain))
         self.features.append(domain_url.shortening_service(self.domain))
         self.features.append(domain_url.redirecting(self.domain))
+        self.features.append(domain_url.suspicious_tld(self.domain))
 
         # Security and HTML-Header features -> https.py
         if encr := https_ssl.https_encrypted(self.domain):
@@ -229,33 +234,34 @@ class WebsiteFeatures:
                              )
 
         # VirusTotal -> review.py REMOVED DUE TO API LIMITS.
-        # vt_results = review.virustotal(self.domain)
-        # self.features.append(vt_results.get("popularity").get("Statvoo",
-        #                                                       "NaN"
-        #                                                       )
-        #                      )
-        # self.features.append(vt_results.get("popularity").get("Alexa",
-        #                                                       "NaN"
-        #                                                       )
-        #                      )
-        # self.features.append(vt_results.get("popularity").get("Cisco
-        # Umbrella",
-        #                                                       "NaN"
-        #                                                       )
-        #                      )
-        #
-        # self.features.append(vt_results.get("security").get("harmless",
-        #                                                     "NaN"
-        #                                                     )
-        #                      )
-        # self.features.append(vt_results.get("security").get("malicious",
-        #                                                     "NaN"
-        #                                                     )
-        #                      )
-        # self.features.append(vt_results.get("security").get("suspicious",
-        #                                                     "NaN"
-        #                                                     )
-        #                      )
+        vt_results = review.virustotal(self.domain)
+        self.features.append(vt_results.get("popularity", "NaN").get("Statvoo",
+                                                                     "NaN"
+                                                                     )
+                             )
+        self.features.append(vt_results.get("popularity", "NaN").get("Alexa",
+                                                                     "NaN"
+                                                                     )
+                             )
+        self.features.append(
+                vt_results.get("popularity", "NaN").get("Cisco Umbrella",
+                                                        "NaN"
+                                                        )
+                )
+
+        self.features.append(vt_results.get("security", "NaN").get("harmless",
+                                                                   "NaN"
+                                                                   )
+                             )
+        self.features.append(vt_results.get("security", "NaN").get("malicious",
+                                                                   "NaN"
+                                                                   )
+                             )
+        self.features.append(
+                vt_results.get("security", "NaN").get("suspicious",
+                                                      "NaN"
+                                                      )
+                )
 
         # GetSafeOnline -> review.py
         gso_results = review.getsafeonline(self.domain)
@@ -279,6 +285,14 @@ class WebsiteFeatures:
         self.features.append(uv_results.get("sites_hosted_same_ip", "NaN"))
         self.features.append(
                 uv_results.get("sites_hosted_same_ip_detections", "NaN")
+                )
+
+        # TrustedShops -> review.py
+        ts_results = review.trustedshops(self.domain)
+        self.features.append(ts_results.get("trusted", "NaN"))
+        self.features.append(ts_results.get("rating", "NaN"))
+        self.features.append(
+                ts_results.get("reviews_count", "NaN")
                 )
 
         # WHOIS -> registrar.py
@@ -320,12 +334,19 @@ class WebsiteFeatures:
 
 
 if __name__ == "__main__":
-    # obj = WebsiteFeatures("chicladdy.com")
+    # obj = WebsiteFeatures("11trikots.com")
 
-    obj = WebsiteFeatures("11trikots.com")
+    obj = WebsiteFeatures("arktis.de")
 
     obj.feature_extraction()
     print("NAMES:", obj.features_names)
     print("FEATURES:", obj.features)
 
-    # TODO: features: emoji/unicodes, homographen,
+    # Convert to pandas dataframe. just for testing.
+    import pandas as pd
+
+    df = pd.DataFrame([obj.features], columns=obj.features_names)
+    # save dataframe to csv
+    df.to_csv("test.csv", index=False)
+
+    # TODO: features: emoji/unicodes, homographen

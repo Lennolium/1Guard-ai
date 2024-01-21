@@ -20,6 +20,7 @@ import json
 import logging
 import re
 import time
+from typing import Any, Dict
 from urllib.parse import urlparse
 import subprocess
 
@@ -36,7 +37,7 @@ from oneguardai.scan import initialization
 LOGGER = logging.getLogger(__name__)
 
 
-def trustpilot(domain: str) -> dict[float, int]:
+def trustpilot(domain: str) -> dict | dict[float, int]:
     """
     Get the trustpilot reviews for the specified domain.
 
@@ -314,7 +315,7 @@ def virustotal2(domain: str) -> dict:
     #     return {}
 
 
-def getsafeonline(domain: str) -> dict:
+def getsafeonline(domain: str) -> dict[bool] or dict[None]:
     """
     Get the getsafeonline check for the specified domain.
     """
@@ -353,7 +354,8 @@ def getsafeonline(domain: str) -> dict:
                 if alt_text == "source-positive":
                     results[source_name] = True
 
-                elif alt_text == "source-negative":
+                elif alt_text == "source-negative" or alt_text == \
+                        "source-neutral":
                     results[source_name] = False
 
                 else:
@@ -576,11 +578,93 @@ def social2(domain: str) -> dict or None:
         return None
 
 
+def trustedshops(domain: str) -> dict:
+    url = f"https://www.trustedshops.de/shops/?q={domain}"
+
+    try:
+        response = requests.get(url, timeout=const.TIMEOUT)
+
+        if response.status_code != 200:
+            LOGGER.error(
+                    "Could not fetch trustedshops rating. Response status "
+                    f"code: {response.status_code}."
+                    )
+            return {}
+
+        soup = BeautifulSoup(response.text, "html.parser")
+
+        first_entry = soup.find("a",
+                                class_="ShopResultItemstyles__ResultItem-sc"
+                                       "-3gooul-0"
+                                )
+
+        if not first_entry:
+            LOGGER.error(
+                    "Could not fetch trustedshops rating. Error: Shop not "
+                    "found."
+                    )
+            return {"trusted": False}
+
+        link = first_entry["href"]
+        link_split = link.split('/')[4]
+
+        # Not a TrustedShops partner.
+        if not link_split.endswith(".html"):
+            LOGGER.error(
+                    "Could not fetch trustedshops rating. Error: Shop is not "
+                    "trustedshop partner."
+                    )
+            return {"trusted": False}
+
+        response2 = requests.get(link, timeout=const.TIMEOUT)
+
+        if response2.status_code != 200:
+            LOGGER.error(
+                    "Could not fetch trustedshops rating. Response status "
+                    f"code: {response2.status_code}."
+                    )
+            return {}
+
+        soup2 = BeautifulSoup(response2.text, "html.parser")
+
+        # Get the total rating for that shop.
+        total_rating = soup2.find('div', class_='sc-aba4ea0b-4').find('span',
+                                                                      class_='sc-aba4ea0b-5'
+                                                                      ).get_text(
+                strip=True
+                )
+
+        rating = float(total_rating.replace(",", "."))
+
+        # Get the total number of reviews submitted for that shop.
+        total_reviews = \
+            soup2.find('h2', class_='Heading-sc-1w8ymiq-0').find_all(
+                    'span', class_='sc-aba4ea0b-11'
+                    )[1].get_text(strip=True)
+
+        reviews_count = int(total_reviews.replace(".", "").replace(
+                "Bewertungen "
+                "insgesamt", ""
+                ).strip()
+                            )
+
+        return {"trusted": True, "rating": rating,
+                "reviews_count": reviews_count
+                }
+
+    # Shop is not a TrustedShops partner.
+    except Exception as e:
+        LOGGER.error(
+                f"Could not fetch trustedshops rating. Error {str(e)}."
+                )
+        return {"trusted": False}
+
+
 if __name__ == "__main__":
     # BAD EXAMPLE:
     # https://www.aboutsafetytool.com/term-and-conditions/
 
-    print(virustotal("chicladdy.com"))
+    print(virustotal("arktis.de"))
     exit(0)
 
     # PERFORMANCE TESTING (ScamAdviser and GetSafeOnline are slow):

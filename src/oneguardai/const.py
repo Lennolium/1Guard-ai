@@ -67,7 +67,9 @@ TIMEOUT = 10
 # PROXYS = {"http": free_proxy}
 
 # API settings and keys. TODO: change to env variables!
-
+API_KEY_VT = ""
+API_KEY_PR = ""
+API_KEY_SCRAPANT = ""
 
 COUNTRY_MAP = {"NaN": "NaN", "AD": 0, "AE": 1, "AF": 2, "AG": 3, "AI": 4,
                "AL": 5, "AM": 6, "AN": 7, "AO": 8, "AQ": 9, "AR": 10, "AS": 11,
@@ -120,3 +122,14 @@ COUNTRY_MAP = {"NaN": "NaN", "AD": 0, "AE": 1, "AF": 2, "AG": 3, "AI": 4,
 VELOCITY_MAP = {"NaN": "NaN", "Very Slow": 0, "Slow": 1,
                 "Average": 2, "Fast": 3, "Very Fast": 4,
                 }
+
+# Sources:
+# https://www.spamhaus.org/statistics/tlds/
+# https://www.phishlabs.com/blog/top-10-tlds-abused/
+# https://surbl.org/tld
+SUSPICIOUS_TLD = ["cn", "degree", "live", "gq", "ga", "ml", "boats",
+                  "haus", "fyi", "top", "tk", "cf", "gdn", "cm", "monster",
+                  "uz", "co", "mx", "io", "ca", "br", "app", "autos", "in",
+                  "asia", "one", "bond", "club", "life", "click", "cc", "biz",
+                  "ru", "tokyo", "me", "cfd", "xyz", "shop", "dev", "link"
+                  ]

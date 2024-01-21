@@ -12,7 +12,7 @@ __email__ = "lennart-haack@mail.de"
 __license__ = "GNU GPLv3"
 __version__ = "0.0.1"
 __date__ = "2023-11-24"
-__status__ = "Prototype/Development/Production"
+__status__ = "Prototype"
 
 # Imports.
 import logging
@@ -74,6 +74,13 @@ def process_domains(input_file_path: str, output_file_path: str, trust: bool) \
                 domains_offline.append(domain)
                 LOGGER.info(f"Skipping: {domain}")
                 LOGGER.info("--------------------------------------------")
+
+                # Write offline domains to separate file.
+                output_offline_file = f"{input_file_path[:-4]}_offline.txt"
+                with open(output_offline_file, 'w') as offline_file:
+                    for domain_offline in domains_offline:
+                        offline_file.write(domain_offline + '\n')
+
                 continue
 
             # Start the website and feature extraction.
@@ -95,15 +102,14 @@ def process_domains(input_file_path: str, output_file_path: str, trust: bool) \
                     )
         LOGGER.info("------------------- END: -------------------")
 
-        # Write offline domains to separate file.
-        output_offline_file = f"{input_file_path[:-4]}_offline.txt"
-        with open(output_offline_file, 'w') as offline_file:
-            for domain_offline in domains_offline:
-                offline_file.write(domain_offline + '\n')
-
 
 if __name__ == "__main__":
     input_file_path = f"{const.APP_PATH}/data/sources/domains.txt"
     output_file_path = f"{const.APP_PATH}/data/output.csv"
 
     process_domains(input_file_path, output_file_path, trust=False)
+
+    # Betrügerische Domains:
+    # https://www.watchlist-internet.at/liste-betruegerischer-shops/
+    # Problematische Domains:
+    # https://www.watchlist-internet.at/liste-problematischer-shops/

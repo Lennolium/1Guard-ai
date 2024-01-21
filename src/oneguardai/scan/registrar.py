@@ -127,10 +127,6 @@ def whois_info(domain: str) -> dict:
 
 
 if __name__ == "__main__":
-    website_domain = "11trikots.com"
+    website_domain = "arktis.de"
     whois_info = whois_info(website_domain)
-
-    if whois_info:
-        print(whois_info)
-    else:
-        print("WHOIS-Informationen nicht verfügbar.")
+    print(whois_info)

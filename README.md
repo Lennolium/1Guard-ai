@@ -140,7 +140,6 @@ TODO
 
 ## Usage
 
-TODO   
 &nbsp;
 
 <!--- Development -->

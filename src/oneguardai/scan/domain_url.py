@@ -20,6 +20,7 @@ import ipaddress
 import logging
 
 import re
+import time
 
 from oneguardai import const
 
@@ -103,6 +104,23 @@ def at_symbol(domain: str) -> bool:
         return False
 
 
+def percent_symbol(domain: str) -> bool:
+    """
+    The function checks if the domain contains an % symbol.
+
+
+
+    :param domain: Domain to check
+    :return: True if the domain contains an % symbol
+    """
+
+    if "%" in domain:
+        return True
+
+    else:
+        return False
+
+
 def pre_suffix(domain: str) -> bool:
     """
     The function checks if the domain has a prefix or suffix.
@@ -114,6 +132,22 @@ def pre_suffix(domain: str) -> bool:
     """
 
     if "-" in domain:
+        return True
+
+    else:
+        return False
+
+
+def https_hostname(domain: str) -> bool:
+    """
+    The function checks if the domain has a fake https prefix (e.g.
+    http://https-www-paypal-com.com/ --> phishing website).
+
+    :param domain: Check if the domain contains a fake https prefix
+    :return: True if the domain contains a fake https prefix
+    """
+
+    if "https" in domain or "HTTPS" in domain:
         return True
 
     else:
@@ -170,6 +204,26 @@ def redirecting(domain: str) -> bool:
     """
 
     if domain.rfind("//") > 0:
+        return True
+
+    else:
+        return False
+
+
+def suspicious_tld(domain: str) -> bool:
+    """
+    The suspicious_tld function takes in a domain as an argument and
+    returns True if the domain has a suspicious top-level domain (TLD).
+    https://www.amazon.eg --> seems to be an amazon link, but .eg is the
+    country code top-level domain (ccTLD) for Egypt.
+
+    :param domain: Check if the domain has a suspicious top-level domain
+    :return: True if the domain has a suspicious top-level domain
+    """
+
+    tld = domain.split(".")[-1]
+
+    if tld in const.SUSPICIOUS_TLD:
         return True
 
     else:

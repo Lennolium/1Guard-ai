@@ -55,7 +55,7 @@ def get_favicon(domain: str, soup: BeautifulSoup) -> str or None:
         if testing.status_code == 200:
             return f"{domain}/favicon.ico"
 
-    except:
+    except Exception:
         return None
 
 
@@ -73,6 +73,7 @@ def favicon_external(domain: str, soup: BeautifulSoup) -> bool or None:
 
     # No favicon found.
     if favicon is None:
+        print("No favicon found.")
         return None
 
     # google --> google.com/favicon.ico
@@ -88,8 +89,9 @@ def favicon_external(domain: str, soup: BeautifulSoup) -> bool or None:
     elif favicon.startswith("http") and domain not in favicon:
         return True
 
+    # 12345.ico --> internal
     else:
-        return None
+        return False
 
 
 def website_traffic(response: requests.Response) -> int or None:
@@ -128,6 +130,7 @@ def forwarding(response: requests.Response) -> bool:
 
 
 def impressum_check(soup: BeautifulSoup) -> bool:
+    # TODO: implement this function, just a placeholder for now.
     # print(soup)
 
     try:
