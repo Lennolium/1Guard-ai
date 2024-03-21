@@ -17,9 +17,11 @@ __status__ = "Prototype"
 
 # Imports.
 import configparser
+import datetime
 import os
 import platform
 import re
+import time
 
 # Constants.
 CURRENT_PLATFORM = platform.uname()[0].upper()  # 'DARWIN' / 'LINUX' ...
@@ -59,6 +61,7 @@ I_FRAME_RE = re.compile(r"[<iframe>|<frameBorder>]")
 INIT_TIMEOUT = 15
 CF_TIMEOUT = 30
 TIMEOUT = 10
+USER_AGENTS_FILE = f"{APP_PATH}/cache/user_agents.json"
 
 # Proxy settings.
 # free_proxy = FreeProxy(country_id=["DE", "AT", "CH", "NL"], timeout=1).get()
@@ -70,6 +73,13 @@ TIMEOUT = 10
 API_KEY_VT = ""
 API_KEY_PR = ""
 API_KEY_SCRAPANT = ""
+API_KEY_SCRAPEUP = ""
+API_KEY_DRIPCRAWLER = ""
+
+# Feature extraction.
+DOMAINS_FOLDER = f"{APP_PATH}/data/sources/online_domains"
+# CSV_OUTPUT = f"{APP_PATH}/data/output_{time.strftime("%Y%m%dT%H%M%SZ")}.csv"
+CSV_OUTPUT = f"{APP_PATH}/data/csv/features.csv"
 
 COUNTRY_MAP = {"NaN": "NaN", "AD": 0, "AE": 1, "AF": 2, "AG": 3, "AI": 4,
                "AL": 5, "AM": 6, "AN": 7, "AO": 8, "AQ": 9, "AR": 10, "AS": 11,
@@ -131,5 +141,5 @@ SUSPICIOUS_TLD = ["cn", "degree", "live", "gq", "ga", "ml", "boats",
                   "haus", "fyi", "top", "tk", "cf", "gdn", "cm", "monster",
                   "uz", "co", "mx", "io", "ca", "br", "app", "autos", "in",
                   "asia", "one", "bond", "club", "life", "click", "cc", "biz",
-                  "ru", "tokyo", "me", "cfd", "xyz", "shop", "dev", "link"
+                  "ru", "tokyo", "me", "cfd", "xyz", "shop", "link"
                   ]

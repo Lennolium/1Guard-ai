@@ -73,7 +73,7 @@ def favicon_external(domain: str, soup: BeautifulSoup) -> bool or None:
 
     # No favicon found.
     if favicon is None:
-        print("No favicon found.")
+        LOGGER.info("No favicon was found.")
         return None
 
     # google --> google.com/favicon.ico

@@ -18,7 +18,6 @@ __status__ = "Prototype/Development/Production"
 import logging
 
 import requests
-import http.client
 from urllib.parse import quote
 
 from oneguardai import const
@@ -29,8 +28,9 @@ LOGGER = logging.getLogger(__name__)
 
 def server_reachable(url: str) -> bool:
     try:
-        response = requests.head(url, allow_redirects=True,
-                                 timeout=const.INIT_TIMEOUT
+        response = requests.head(url=url,
+                                 allow_redirects=True,
+                                 timeout=const.INIT_TIMEOUT,
                                  )
         if response.status_code != 200:
             LOGGER.warning("Website is NOT reachable. Status code: "
@@ -40,16 +40,27 @@ def server_reachable(url: str) -> bool:
         else:
             return True
 
-    except (requests.exceptions.HTTPError,
-            requests.exceptions.ConnectionError) as e:
-        LOGGER.warning(f"Website is NOT reachable: {str(e)}.")
-        return False
-
     except Exception as e:
-        LOGGER.warning("Error occurred while checking if website is "
-                       f"reachable: {str(e)}."
+        LOGGER.warning(f"Connection with SSL failed. Retrying "
+                       f"without SSL now ... {str(e)}"
                        )
-        return False
+        try:
+            response2 = requests.head(url=url,
+                                      allow_redirects=True,
+                                      timeout=const.INIT_TIMEOUT,
+                                      verify=False,
+                                      )
+            if response2.status_code != 200:
+                LOGGER.warning("Website is NOT reachable. Status code: "
+                               f"{response2.status_code}."
+                               )
+                return False
+            else:
+                return True
+
+        except Exception as e:
+            LOGGER.warning(f"Website is NOT reachable: {str(e)}.")
+            return False
 
 
 def cloudflare_protected(url: str) -> bool or None:
@@ -109,7 +120,7 @@ def cloudflare_bypass(url: str) -> requests.Response or None:
             return None
 
         response_snippet = response.content[250:450]
-        if b"Suspected phishing site | Cloudflare" in response_snippet:
+        if b"suspected phishing site | cloudflare" in response_snippet.lower():
             LOGGER.warning("Cloudflare flagged the website as phishing. "
                            "We can not bypass the protection."
                            )
@@ -120,6 +131,47 @@ def cloudflare_bypass(url: str) -> requests.Response or None:
     except Exception as e:
         LOGGER.error(
                 f"An error occurred while trying to bypass cloudflare "
-                f"protection: {str(e)}."
+                f"protection: {str(e)}. Try another scraper service ..."
+                )
+
+        # Try another scraper service.
+        second_try = cloudflare_bypass2(url)
+        if second_try is not None:
+            return second_try
+
+        return None
+
+
+def cloudflare_bypass2(url: str) -> requests.Response or None:
+    payload = {'api_key': const.API_KEY_SCRAPEUP,
+               'url': url,
+               'render': True,
+               }
+
+    try:
+        response = requests.get(
+                'http://api.scrapeup.com',
+                params=payload, allow_redirects=True, timeout=const.CF_TIMEOUT
+                )
+
+        if response.status_code != 200:
+            LOGGER.error("Could not bypass cloudflare protection. Response "
+                         f"status code: {response.status_code}."
+                         )
+            return None
+
+        response_snippet = response.content[250:450]
+        if b"Suspected phishing site | Cloudflare" in response_snippet:
+            LOGGER.warning("Cloudflare flagged the website as phishing. "
+                           "We can not bypass the protection."
+                           )
+            return None
+
+        return response
+
+    except Exception as e:
+        LOGGER.error(
+                f"An error occurred while trying to second cloudflare "
+                f"bypass: {str(e)}. Could not scrape ..."
                 )
         return None

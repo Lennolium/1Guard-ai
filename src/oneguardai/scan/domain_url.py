@@ -36,7 +36,9 @@ def length_domain(domain: str) -> int:
     :return: A int value
     """
 
-    return len(domain)
+    domain_no_tld = domain.rsplit(".", 1)[0]
+
+    return len(domain_no_tld)
 
 
 def subdomain(domain: str) -> bool:
@@ -221,7 +223,7 @@ def suspicious_tld(domain: str) -> bool:
     :return: True if the domain has a suspicious top-level domain
     """
 
-    tld = domain.split(".")[-1]
+    tld = domain.rsplit(".")[-1]
 
     if tld in const.SUSPICIOUS_TLD:
         return True

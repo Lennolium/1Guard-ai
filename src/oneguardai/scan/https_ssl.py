@@ -134,29 +134,39 @@ def security_headers(response: requests.Response) -> dict:
     :rtype: dict
     """
 
-    # Get the headers and cookies.
-    headers = response.headers
-    cookies = response.cookies
+    try:
+        # Get the headers and cookies.
+        headers = response.headers
+        cookies = response.cookies
 
-    # List of security headers to check.
-    security_headers = [
-            "strict-transport-security",  # HSTS
-            "content-security-policy",  # CSP
-            "x-content-type-options",  # X-Content-Type-Options
-            "x-frame-options",  # X-Frame-Options
-            ]
+        # List of security headers to check.
+        security_headers = [
+                "strict-transport-security",  # HSTS
+                "content-security-policy",  # CSP
+                "x-content-type-options",  # X-Content-Type-Options
+                "x-frame-options",  # X-Frame-Options
+                ]
 
-    result = {}
+        result = {}
 
-    # Check if the headers are present.
-    for header in security_headers:
-        if header in headers:
-            result[header] = True
-        else:
-            result[header] = False
+        # Check if the headers are present.
+        for header in security_headers:
+            if header in headers:
+                result[header] = True
+            else:
+                result[header] = False
 
-    # Check if the cookies are secure (HTTPS only).
-    result["secure-cookies"] = all(cookie.secure for cookie in cookies)
+        # Check if the cookies are secure (HTTPS only).
+        result["secure-cookies"] = all(cookie.secure for cookie in cookies)
+
+    except Exception:
+        result = {
+                "strict-transport-security": False,
+                "content-security-policy": False,
+                "x-content-type-options": False,
+                "x-frame-options": False,
+                "secure-cookies": False
+                }
 
     return result
 

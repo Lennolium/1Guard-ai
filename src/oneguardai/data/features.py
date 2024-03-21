@@ -27,6 +27,7 @@ from oneguardai.scan import (domain_url, https_ssl, misc, registrar, review,
                              script)
 from oneguardai.scan import initialization
 from oneguardai.utils import log
+from oneguardai.data import scrape
 
 # Root logger and log counter.
 if __name__ == "__main__":
@@ -56,8 +57,8 @@ class WebsiteFeatures:
             # Review sites features: ScamAdviser.
             "SA_RATING", "SA_BACKLINKS", "SA_WEBSITE_SPEED", "SA_SSL_CERT",
             # Review sites features: VirusTotal.
-            "VT_RANK_STATVOO", "VT_RANK_ALEXA", "VT_RANK_CISCO",
-            "VT_SEC_HARMLESS", "VT_SEC_MALICIOUS", "VT_SEC_SUSPICIOUS",
+            # "VT_RANK_STATVOO", "VT_RANK_ALEXA", "VT_RANK_CISCO",
+            # "VT_SEC_HARMLESS", "VT_SEC_MALICIOUS", "VT_SEC_SUSPICIOUS",
             # Review sites features: GetSafeOnline.
             "GSO_MALTIVERSE", "GSO_APWG", "GSO_COMPLYTRON",
             "GSO_DNSFILTER", "GSO_FLASHSTART", "GSO_IQGLOBAL",
@@ -82,7 +83,6 @@ class WebsiteFeatures:
         self.domain = domain
         self.url = f"https://{domain}"
         self.alive = None
-        self.fetchable = None
 
         self.response = None
         self.soup = None
@@ -101,51 +101,60 @@ class WebsiteFeatures:
 
     def initialization(self):
 
-        self.alive = initialization.server_reachable(self.url)
+        LOGGER.info("------------------ START -------------------")
+        LOGGER.info(f"Domain: {self.domain}")
 
-        # Stop here if the website is not reachable.
-        if self.alive is False:
-            return
+        response = scrape.get(domain=self.domain)
 
-        # First check for cloudflare protection and bypass if necessary.
-        cp = initialization.cloudflare_protected(self.url)
-        if cp:
-            self.response = initialization.cloudflare_bypass(self.url)
+        if response:
+            if response.success:
+                self.alive = True
+                self.response = response.response
+                self.soup = response.soup
 
-            # Cloudflare flagged website as phishing -> can not bypass.
-            if self.response is None:
-                self.fetchable = False
-                return
-
-        else:
-            self.response = requests.get(self.url, timeout=const.INIT_TIMEOUT)
-
-            if self.response.status_code != 200:
-                LOGGER.error(
-                        "Could not fetch websites html using requests. "
-                        f"Response status code: {self.response.status_code}."
-                        )
-
-                self.fetchable = False
-                return
-
-        self.fetchable = True
-
-        # Get the soup.
-        self.soup = BeautifulSoup(self.response.text, features="html.parser")
+        # NOT NEEDED ANYMORE:
+        # self.alive = initialization.server_reachable(self.url)
+        #
+        # # Stop here if the website is not reachable.
+        # if self.alive is False:
+        #     return
+        #
+        # # First check for cloudflare protection and bypass if necessary.
+        # cp = initialization.cloudflare_protected(self.url)
+        # if cp:
+        #     self.response = initialization.cloudflare_bypass(self.url)
+        #
+        #     # Cloudflare flagged website as phishing -> can not bypass.
+        #     if self.response is None:
+        #         self.fetchable = False
+        #         return
+        #
+        # else:
+        #     self.response = requests.get(self.url,
+        #     timeout=const.INIT_TIMEOUT)
+        #
+        #     if self.response.status_code != 200:
+        #         LOGGER.error(
+        #                 "Could not fetch websites html using requests. "
+        #                 f"Response status code: {self.response.status_code}."
+        #                 )
+        #
+        #         self.fetchable = False
+        #         return
+        #
+        # self.fetchable = True
+        #
+        # # Get the soup.
+        # self.soup = BeautifulSoup(self.response.text, features="html.parser")
 
     def feature_extraction(self):
-        LOGGER.info("------------------ START: ------------------")
-        LOGGER.info(f"Domain: {self.domain}")
 
         if self.alive:
             LOGGER.info("Website is reachable. Starting feature extraction "
                         "..."
                         )
         else:
-            LOGGER.warning("Website is NOT reachable! Stopping feature "
-                           "extraction."
-                           )
+            LOGGER.info("----------------- SKIPPING -----------------")
             return
 
         start_time = time.perf_counter()
@@ -164,11 +173,11 @@ class WebsiteFeatures:
 
         # Security and HTML-Header features -> https.py
         if encr := https_ssl.https_encrypted(self.domain):
-            self.features.append(True)  # HTTPS enabled
+            self.features.append(True)  # HTTPS enabled (good)
             self.features.append(encr.get("wildcard", True))
         else:
-            self.features.append(False)  # HTTPS disabled
-            self.features.append(True)  # HTTPS wildcard enabled
+            self.features.append(False)  # HTTPS disabled (bad)
+            self.features.append(True)  # HTTPS wildcard enabled (bad)
 
         sec_headers = https_ssl.security_headers(self.response)
         self.features.append(sec_headers.get("strict-transport-security",
@@ -193,8 +202,13 @@ class WebsiteFeatures:
                              )
 
         # Script features -> script.py
-        self.features.append(script.statusbar_mouseover(self.response))
-        self.features.append(script.rightclick_disabled(self.response))
+        self.features.append(script.statusbar_mouseover(
+                self.response
+                )
+                )
+        self.features.append(
+                script.rightclick_disabled(self.response)
+                )
         self.features.append(script.popup_window(self.response))
         self.features.append(script.i_frame(self.response))
 
@@ -205,14 +219,8 @@ class WebsiteFeatures:
 
         # TrustPilot -> review.py
         tp_results = review.trustpilot(self.domain)
-        self.features.append(tp_results.get("rating",
-                                            "NaN"
-                                            )
-                             )
-        self.features.append(tp_results.get("reviews_count",
-                                            "NaN"
-                                            )
-                             )
+        self.features.append(tp_results.get("rating", "NaN"))
+        self.features.append(tp_results.get("reviews_count", "NaN"))
 
         # ScamAdviser -> review.py
         sa_results = review.scamadviser(self.domain)
@@ -234,34 +242,37 @@ class WebsiteFeatures:
                              )
 
         # VirusTotal -> review.py REMOVED DUE TO API LIMITS.
-        vt_results = review.virustotal(self.domain)
-        self.features.append(vt_results.get("popularity", "NaN").get("Statvoo",
-                                                                     "NaN"
-                                                                     )
-                             )
-        self.features.append(vt_results.get("popularity", "NaN").get("Alexa",
-                                                                     "NaN"
-                                                                     )
-                             )
-        self.features.append(
-                vt_results.get("popularity", "NaN").get("Cisco Umbrella",
-                                                        "NaN"
-                                                        )
-                )
-
-        self.features.append(vt_results.get("security", "NaN").get("harmless",
-                                                                   "NaN"
-                                                                   )
-                             )
-        self.features.append(vt_results.get("security", "NaN").get("malicious",
-                                                                   "NaN"
-                                                                   )
-                             )
-        self.features.append(
-                vt_results.get("security", "NaN").get("suspicious",
-                                                      "NaN"
-                                                      )
-                )
+        # vt_results = review.virustotal(self.domain)
+        # self.features.append(vt_results.get("popularity", "NaN").get(
+        # "Statvoo",
+        #                                                              "NaN"
+        #                                                              )
+        #                      )
+        # self.features.append(vt_results.get("popularity", "NaN").get("Alexa",
+        #                                                              "NaN"
+        #                                                              )
+        #                      )
+        # self.features.append(
+        #         vt_results.get("popularity", "NaN").get("Cisco Umbrella",
+        #                                                 "NaN"
+        #                                                 )
+        #         )
+        #
+        # self.features.append(vt_results.get("security", "NaN").get(
+        # "harmless",
+        #                                                            "NaN"
+        #                                                            )
+        #                      )
+        # self.features.append(vt_results.get("security", "NaN").get(
+        # "malicious",
+        #                                                            "NaN"
+        #                                                            )
+        #                      )
+        # self.features.append(
+        #         vt_results.get("security", "NaN").get("suspicious",
+        #                                               "NaN"
+        #                                               )
+        #         )
 
         # GetSafeOnline -> review.py
         gso_results = review.getsafeonline(self.domain)
@@ -330,7 +341,7 @@ class WebsiteFeatures:
                 )
         LOGGER.info(f"Total Time elapsed: {elapsed_time:.2f} s"
                     )
-        LOGGER.info("------------------- END: -------------------")
+        LOGGER.info("------------------- END --------------------")
 
 
 if __name__ == "__main__":
@@ -339,14 +350,17 @@ if __name__ == "__main__":
     obj = WebsiteFeatures("arktis.de")
 
     obj.feature_extraction()
+
     print("NAMES:", obj.features_names)
     print("FEATURES:", obj.features)
 
+    exit()
+
     # Convert to pandas dataframe. just for testing.
-    import pandas as pd
-
-    df = pd.DataFrame([obj.features], columns=obj.features_names)
-    # save dataframe to csv
-    df.to_csv("test.csv", index=False)
-
-    # TODO: features: emoji/unicodes, homographen
+    # import pandas as pd
+    #
+    # df = pd.DataFrame([obj.features], columns=obj.features_names)
+    # # save dataframe to csv
+    # df.to_csv("test.csv", index=False)
+    #
+    # # TODO: features: emoji/unicodes, homographen
