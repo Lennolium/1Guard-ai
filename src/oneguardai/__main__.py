@@ -52,6 +52,13 @@ def exit_handler(signum=None, frame=None, error=False):
         code = 0
         LOGGER.info("Exiting the application properly ...")
 
+    LOGGER.info("---------------- Exceptions: ---------------")
+    LOGGER.info(f"Warnings: {LOG_COUNT.warnings}, Errors: "
+                f"{LOG_COUNT.errors}, Criticals: "
+                f"{LOG_COUNT.criticals}"
+                )
+    LOGGER.info("--------------------------------------------")
+
     sys.exit(code)
 
 
@@ -98,12 +105,23 @@ def main():
     # Get min log level from config file and apply it to root logger.
     # 1 = DEBUG, 2 = INFO, 3 = WARNING, 4 = ERROR, 5 = CRITICAL.
     log_level = int(const.CONFIG["Log"]["min_level"]) * 10
+    log_level = 20
     LOGGER.setLevel(log_level)
 
     # TODO: Add startup checks here.
 
     # All startup checks finished without critical errors.
     LOGGER.info("Startup checks done and 1Guard-ai ready to run!")
+
+    # from scan import review
+
+    # result = review.scamadviser("chicladdy.com")
+    # print(result)
+
+    from oneguardai.data import feature_extraction_parallel as fep
+    fep.extraction()
+
+    exit_handler(error=False)
 
 
 if __name__ == "__main__":

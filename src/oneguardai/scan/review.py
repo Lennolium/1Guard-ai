@@ -16,82 +16,143 @@ __date__ = "2023-11-07"
 __status__ = "Prototype"
 
 # Imports.
+import json
 import logging
+import re
+import time
+from typing import Any, Dict
 from urllib.parse import urlparse
 import subprocess
 
 import requests
 from bs4 import BeautifulSoup
 from importlib import import_module
+import http.client
+from urllib.parse import quote
 
 from oneguardai import const
+from oneguardai.scan import initialization
+from oneguardai.data import scrape
 
 # Child logger.
 LOGGER = logging.getLogger(__name__)
 
 
-def virustotal(domain: str) -> dict or None:
+def trustpilot(domain: str) -> dict | dict[float, int]:
     """
-    Get the virustotal report for the specified domain.
+    Get the trustpilot reviews for the specified domain.
+
+    We need to scrape the website because TrustPilot does only provide
+    a paid API (200 USD per month).
     """
 
-    url = f"https://www.virustotal.com/api/v3/domains/{domain}"
+    url = f"https://de.trustpilot.com/review/{domain}"
 
-    # TODO: Move API-key to environment variable.
-    headers = {
-            "accept": "application/json",
-            "x-apikey":
-                "bbf5ddd66e27f07672fe611a9235961751c7e3b59d57d478231315b29b155b59",
-            }
     try:
-        response = requests.get(url, headers=headers)
+        # response = requests.get(url, timeout=const.TIMEOUT)
+        response = scrape.get(domain=url)
 
-        if response.status_code != 200:
-            LOGGER.error("Could not fetch virustotal rating. Response status "
-                         f"code: {response.status_code}."
+        if response.success is False:
+            LOGGER.error("Could not fetch trustpilot rating. Response status "
+                         f"code: {response.response.status_code}."
                          )
-            return None
+            return {}
 
-        response = response.json()
+        if response.response.status_code == 404:
+            LOGGER.warning("Could not fetch trustpilot rating: Shop not found."
+                           )
 
-        # Extract popularity and security stats from virustotal
-        # api response.
-        results = {"popularity": {key: item["rank"] for key, item in
-                                  response["data"]["attributes"][
-                                      "popularity_ranks"].items()},
-                   "security": response["data"]["attributes"][
-                       "last_analysis_stats"]
-                   }
+            return {}
 
-        return results
+        elif response.response.status_code != 200:
+            LOGGER.error("Could not fetch trustpilot rating. Response status "
+                         f"code: {response.response.status_code}."
+                         )
+            return {}
+
+        rating_element = response.soup.find(
+                class_="typography_body-l__KUYFJ "
+                       "typography_appearance-subtle__8_H2l"
+                )
+
+        rating_count = response.soup.find(
+                class_="typography_body-l__KUYFJ "
+                       "typography_appearance-default__AAY17"
+                )
+
+        # Convert strings to floats.
+        if rating_element and rating_count:
+            total_rating = rating_element.text.strip()
+            total_rating = total_rating.replace(",", ".")
+            total_rating = float(total_rating)
+
+            total_count = rating_count.text.strip()
+            total_count = total_count.replace("Insgesamt", "").strip()
+            total_count = total_count.replace(".", "").strip()
+            total_count = int(total_count)
+
+            return {"rating": total_rating, "reviews_count": total_count}
+
+        else:
+            return {}
 
     except Exception as e:
-        LOGGER.error("An error occurred while fetching the virustotal rating:"
+        LOGGER.error("An error occurred while fetching the trustpilot rating:"
                      f" {str(e)}."
                      )
-        return None
+        return {}
 
 
-# TRUSTED SHOPS!
-
-def scamadviser(domain: str) -> dict or None:
+def scamadviser(domain: str) -> dict:
     """
     Get the scamadviser score and more data for the specified domain.
+
+    :return: dict with the following keys:
+        rating (1-100),
+        backlinks (int),
+        website_speed (str),
+        ssl_certificate_valid (bool)
+
     """
 
     url = f"https://www.scamadviser.com/check-website/{domain}"
 
     try:
+        # response = requests.get(url, timeout=const.TIMEOUT)
+        response = scrape.get(domain=url)
 
-        response = requests.get(url)
+        if response.success is False:
+            raise RuntimeError("Force no ssl.")
 
-        if response.status_code != 200:
-            LOGGER.error("Could not fetch scamadviser rating. Response status "
-                         f"code: {response.status_code}."
+        else:
+            soup = response.soup
+
+    except Exception as e1:
+        LOGGER.warning("Could not fetch scamadviser rating. Trying again with"
+                       "out SSL ..."
+                       )
+        try:
+            response = requests.get(url=url,
+                                    timeout=const.TIMEOUT,
+                                    verify=False,
+                                    allow_redirects=True
+                                    )
+
+            if response.status_code != 200:
+                LOGGER.error("Could not fetch scamadviser rating. Response "
+                             f"status code: {response.status_code}."
+                             )
+                return {}
+
+            soup = BeautifulSoup(response.text, "html.parser")
+
+        except Exception as e2:
+            LOGGER.error("Final try to fetch scamadviser rating failed."
+                         f"Both errors: {str(e1)}{str(e2)}."
                          )
-            return None
+            return {}
 
-        soup = BeautifulSoup(response.text, "html.parser")
+    try:
 
         # Scamadviser rating score.
         trustscore_div = soup.find("div", {"id": "trustscore"})
@@ -126,6 +187,10 @@ def scamadviser(domain: str) -> dict or None:
         else:
             website_speed_value = None
 
+        # Convert speed values (str) to int.
+        if website_speed_value:
+            website_speed_value = const.VELOCITY_MAP[website_speed_value]
+
         # SSL certificate validation.
         ssl_cert_div = soup.find("div", {"class": "block__col"},
                                  string="SSL certificate valid"
@@ -155,120 +220,228 @@ def scamadviser(domain: str) -> dict or None:
         LOGGER.error("An error occurred while fetching the scamadviser rating:"
                      f" {str(e)}."
                      )
-        return None
+        return {}
 
 
-def trustpilot(domain: str) -> dict[float, int] or None:
+def virustotal(domain: str) -> dict:
     """
-    Get the trustpilot reviews for the specified domain.
+    Get the virustotal report for the specified domain.
+    API-Limit: 500 requests a day, 4 requests a minute.
     """
 
-    url = f"https://trustpilot.com/review/{domain}"
+    url = f"https://www.virustotal.com/api/v3/domains/{domain}"
 
+    headers = {
+            "accept": "application/json",
+            "x-apikey": const.API_KEY_VT,
+            }
     try:
-        response = requests.get(url)
+        response = requests.get(url, headers=headers, timeout=const.TIMEOUT)
 
         if response.status_code != 200:
-            LOGGER.error("Could not fetch trustpilot rating. Response status "
+            LOGGER.error("Could not fetch virustotal rating. Response status "
                          f"code: {response.status_code}."
                          )
-            return None
+            return {}
+
+        response = response.json()
+
+        # Extract popularity and security stats from virustotal
+        # api response.
+        results = {"popularity": {key: item["rank"] for key, item in
+                                  response["data"]["attributes"][
+                                      "popularity_ranks"].items()},
+                   "security": response["data"]["attributes"][
+                       "last_analysis_stats"]
+                   }
+
+        return results
+
+    except Exception as e:
+        LOGGER.error("An error occurred while fetching the virustotal rating:"
+                     f" {str(e)}."
+                     )
+        return {}
+
+
+def getsafeonline(domain: str) -> dict[bool] or dict[None]:
+    """
+    Get the getsafeonline check for the specified domain.
+    """
+
+    url = f"https://check.getsafeonline.org/check/{domain}"
+
+    try:
+        # response = requests.get(url, timeout=const.TIMEOUT)
+        response = scrape.get(domain=url)
+
+        if response.response.status_code != 200:
+            LOGGER.error("Could not fetch getsafeonline rating. Response "
+                         f"status code: {response.response.status_code}."
+                         )
+            return {}
+
+        results = {}
+
+        review_sections = response.soup.find_all('div',
+                                                 class_='flex flex-col gap-4 '
+                                                        'md:flex-row'
+                                                 )
+
+        for section in review_sections:
+            a_element = section.find("a", class_="text-black")
+            source_name = None
+            if a_element:
+                source_name = a_element.text.strip()[: -1]
+
+            img_element = section.find("img")
+            if img_element and source_name is not None:
+
+                alt_text = img_element.get("alt", "").lower()
+
+                if alt_text == "source-positive":
+                    results[source_name] = True
+
+                elif alt_text == "source-negative" or alt_text == \
+                        "source-neutral":
+                    results[source_name] = False
+
+                else:
+                    results[source_name] = None
+
+        return results
+
+    except Exception as e:
+        LOGGER.error("An error occurred while fetching the getsafeonline "
+                     f"checks: {str(e)}."
+                     )
+        return {}
+
+
+def pagerank(domain: str) -> dict:
+    url = ("https://openpagerank.com/api/v1.0/getPageRank?domains%5B0%5D"
+           f"={domain}")
+
+    headers = {"API-OPR": const.API_KEY_PR}
+
+    try:
+        response = requests.get(url, headers=headers, timeout=const.TIMEOUT)
+
+        if response.status_code != 200:
+            LOGGER.error("Could not fetch PageRank. Response status "
+                         f"code: {response.status_code}."
+                         )
+            return {}
+
+        response = response.json()
+
+        # Check if domain is found in the api response.
+        if response["response"][0]["status_code"] != 200:
+            LOGGER.error("Could not fetch PageRank. Response: "
+                         f"{response['response'][0]['error']}."
+                         )
+            return {}
+
+        # Extract data from api response.
+        results = {"global_rank": int(response["response"][0]["rank"]),
+                   "page_rank": int(response["response"][0][
+                                        "page_rank_integer"]
+                                    ),
+                   }
+
+        return results
+
+    except Exception as e:
+        LOGGER.error("An error occurred while fetching the PageRank:"
+                     f" {str(e)}."
+                     )
+        return {}
+
+
+def urlvoid(domain: str) -> dict:
+    url = "https://www.urlvoid.com/"
+    scan_url = f"https://www.urlvoid.com/scan/{domain}/"
+
+    # POST request.
+    payload = {"site": domain, "go": ""}
+    headers = {"Referer": scan_url}
+
+    try:
+        response = requests.post(url, data=payload, headers=headers)
+
+        if response.status_code != 200:
+            LOGGER.error("Could not get URLVoid data. Response status "
+                         f"code: {response.status_code}."
+                         )
+            return {}
 
         soup = BeautifulSoup(response.text, "html.parser")
 
-        rating_element = soup.find(
-                class_="typography_body-l__KUYFJ "
-                       "typography_appearance-subtle__8_H2l"
+        # Get number of detections.
+        table = soup.find("table", class_="table-custom")
+
+        detection_counts_cell = table.find("span", class_="font-bold",
+                                           string="Detections Counts"
+                                           )
+        detection_counts = detection_counts_cell.find_next("td").text.strip()
+        detection_counts = int(detection_counts.split('/')[0].strip())
+
+        # Check for number of hosted websites at the same ip.
+        ip_link_cell = table.find("span", class_="font-bold",
+                                  string="IP Address"
+                                  )
+        ip_link_label = ip_link_cell.find_next("td").text.strip()
+
+        # If no ip address is found, we can not get the number of hosted
+        # websites at the same ip.
+        if ip_link_label == "Unknown":
+            results = {"detections": detection_counts,
+                       "sites_hosted_same_ip": "NaN",
+                       "sites_hosted_same_ip_detections": "NaN",
+                       }
+
+            return results
+
+        ip_link = soup.find("a", string="Find Websites")["href"]
+
+        response2 = requests.get(ip_link, timeout=const.TIMEOUT)
+
+        if response2.status_code != 200:
+            LOGGER.error("Could not get URLVoid data. Response status "
+                         f"code: {response2.status_code}."
+                         )
+            return {}
+
+        soup2 = BeautifulSoup(response2.text, "html.parser")
+
+        # Get number of servers hosted at same ip (-1 because we do not
+        # count the current domain).
+        server_count = len(soup2.select('.table-custom tbody tr'))
+        server_count -= 1
+
+        # Check for number of detections of hosted websites at same ip.
+        server_detected_count = len(
+                soup2.select('.table-custom tbody tr:has(.text-danger)')
                 )
+        # If there are detections for the current domain, we need to
+        # subtract 1, because we do not count detections for the current
+        # domain.
+        if detection_counts > 0:
+            server_detected_count -= 1
 
-        rating_count = soup.find(
-                class_="typography_body-l__KUYFJ "
-                       "typography_appearance-default__AAY17"
-                )
+        # Extract data from response.
+        results = {"detections": detection_counts,
+                   "sites_hosted_same_ip": server_count,
+                   "sites_hosted_same_ip_detections": server_detected_count,
+                   }
 
-        # Convert strings to floats.
-        if rating_element and rating_count:
-            total_rating = rating_element.text.strip()
-            total_rating = float(total_rating)
-
-            total_count = rating_count.text.strip()
-            total_count = total_count.replace("total", "").strip()
-            total_count = total_count.replace(",", "").strip()
-            total_count = int(total_count)
-
-            return {"rating": total_rating, "review_count": total_count}
-
-        else:
-            return None
+        return results
 
     except Exception as e:
-        LOGGER.error("An error occurred while fetching the trustpilot rating:"
+        LOGGER.error("An error occurred while fetching URLVoid data:"
                      f" {str(e)}."
                      )
-        return None
-
-
-# TODO: Move somewhere else!
-def bypass_cloudflare(url):
-    import http.client
-    from urllib.parse import quote
-
-    encoded_url = quote(url, safe="")
-
-    conn = http.client.HTTPSConnection("api.scrapingant.com")
-
-    # Only 10000 requests per month are included in free plan.
-    conn.request(
-            "GET",
-            f"/v2/general?url="
-            f"{encoded_url}&x-api-key=2c4715421129452da7154a880ef35a14"
-            f"&return_page_source=true"
-            )
-
-    res = conn.getresponse()
-    data = res.read()
-
-    html = data.decode("utf-8")
-
-    soup = BeautifulSoup(html, "html.parser")
-
-    return soup
-
-
-# WiP: not working yet!
-def get_redirected_url(review_url, url_to_check):
-    # review_url -> get the csrf token of search input field.
-    soup = bypass_cloudflare(review_url)
-
-    # response = requests.get(review_url)
-    # soup = BeautifulSoup(response.text, 'html.parser')
-
-    csrf_token = soup.find('input', {'name': '_csrf-frontend'}).get('value')
-
-    search_url = 'https://www.scamdoc.com/interrogation'
-
-    post_data = {
-            '_csrf-frontend': csrf_token,
-            'expression': url_to_check
-            }
-
-    headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
-                          'AppleWebKit/537.36 (KHTML, like Gecko) '
-                          'Chrome/91.0.4472.124 Safari/537.36',
-            }
-
-    response = requests.post(search_url, data=post_data, headers=headers,
-                             allow_redirects=False
-                             )
-
-    if response.status_code == 302:  # Forwards to the result page.
-        redirected_url = response.headers['Location']
-        return redirected_url
-    else:
-        redirected_url = response.headers['Location']
-        return (f"URL nicht gefunden oder nicht bewertet auf ScamAdvisor. "
-                f"{redirected_url}")
+        return {}
 
 
 def social(domain: str) -> dict or None:
@@ -295,7 +468,6 @@ def social(domain: str) -> dict or None:
                                                )["detected"]
 
         for item in result:
-            print("ITEMS:", item)
 
             # 'https://my.shop.com/buy/this' -> 'shop'.
             domain_name = urlparse(item["link"]).netloc.split('.')[-2]
@@ -314,45 +486,163 @@ def social(domain: str) -> dict or None:
 
 
 def social2(domain: str) -> dict or None:
-    # Search for profiles with url.tld and url (shop.com and shop).
     domain_strip = '.'.join(domain.split('.')[:-1])
 
     sherlock_local_path = f"{const.APP_PATH}/utils/sherlock/sherlock.py"
     opt_arguments = "--no-color"
     timeout_arg = "--timeout"
     timeout_val = "20"
+    output_arg = "--output"
+    output_val = ""
 
-    results = {}
+    results = {"social_count": 0, "social": []}
 
     try:
         result = subprocess.run(["python3", sherlock_local_path,
                                  domain_strip, opt_arguments, timeout_arg,
-                                 timeout_val],
+                                 timeout_val, output_arg, output_val],
                                 capture_output=True,
                                 text=True, check=True, timeout=300
                                 )
 
-        print(result.stdout)
+        # print(result.stdout)
+
+        # Regular expression (only name of social media platform).
+        pattern = re.compile(r"\[\+\] (\w+):")
+
+        matches = pattern.findall(result.stdout)
+
+        for match in matches:
+            results["social_count"] += 1
+
+            results["social"].append(match)
+
+        return results
 
     except subprocess.CalledProcessError as e:
         LOGGER.error("An error occurred while fetching the social media "
-                     f"profiles: {str(e)} {str(e.output)}."
+                     f"profiles: {str(e), str(e.output)}."
                      )
         return None
 
 
-# social("chicladdy.com")
-social2("chicladdy.com")
+def trustedshops(domain: str) -> dict:
+    url = f"https://www.trustedshops.de/shops/?q={domain}"
 
-if __name__ == "__main__x":
-    trust = trustpilot("chicladdy.com")
-    if trust:
-        print("Trustpilot:", trust)
+    try:
+        # response = requests.get(url, timeout=const.TIMEOUT)
+        response = scrape.get(domain=url)
 
-    scam = scamadviser("chicladdy.com")
-    if scam:
-        print("Scamadviser:", scam)
+        if response.response.status_code != 200:
+            LOGGER.error(
+                    "Could not fetch trustedshops rating. Response status "
+                    f"code: {response.response.status_code}."
+                    )
+            return {}
 
-    virus = virustotal("chicladdy.com")
-    if virus:
-        print("Virustotal:", virus)
+        first_entry = response.soup.find("a",
+                                         class_="ShopResultItemstyles__ResultItem-sc"
+                                                "-3gooul-0"
+                                         )
+
+        if not first_entry:
+            LOGGER.error(
+                    "Could not fetch trustedshops rating. Error: Shop not "
+                    "found."
+                    )
+            return {"trusted": False}
+
+        link = first_entry["href"]
+        link_split = link.split('/')[4]
+
+        # Not a TrustedShops partner.
+        if not link_split.endswith(".html"):
+            LOGGER.error(
+                    "Could not fetch trustedshops rating. Error: Shop is not "
+                    "trustedshop partner."
+                    )
+            return {"trusted": False}
+
+        response2 = requests.get(link, timeout=const.TIMEOUT)
+
+        if response2.status_code != 200:
+            LOGGER.error(
+                    "Could not fetch trustedshops rating. Response status "
+                    f"code: {response2.status_code}."
+                    )
+            return {}
+
+        soup2 = BeautifulSoup(response2.text, "html.parser")
+
+        # Get the total rating for that shop.
+        total_rating = soup2.find('div', class_='sc-c9c42b4a-4').find('span',
+                                                                      class_='sc-c9c42b4a-5'
+                                                                      ).get_text(
+                strip=True
+                )
+
+        rating = float(total_rating.replace(",", "."))
+
+        # Get the total number of reviews submitted for that shop.
+        total_reviews = \
+            soup2.find('h2', class_='Heading-sc-1w8ymiq-0').find_all(
+                    'span', class_='sc-c9c42b4a-11'
+                    )[1].get_text(strip=True)
+
+        reviews_count = int(total_reviews.replace(".", "").replace(
+                "Bewertungen "
+                "insgesamt", ""
+                ).strip()
+                            )
+
+        return {"trusted": True, "rating": rating,
+                "reviews_count": reviews_count
+                }
+
+    # Shop is not a TrustedShops partner.
+    except Exception as e:
+        LOGGER.error(
+                f"Could not fetch trustedshops rating. Error: "
+                f"{e.__class__.__name__}: {e}."
+                )
+        return {"trusted": False}
+
+
+if __name__ == "__main__":
+    # BAD EXAMPLE: 11trikots.com
+
+    # PERFORMANCE TESTING (ScamAdviser and GetSafeOnline are slow):
+    start = time.perf_counter()
+    print(trustpilot("arktis.de"))
+    end = time.perf_counter()
+    print("TP TIME ELAPSED:", end - start)
+
+    start = time.perf_counter()
+    print(trustedshops("arktis.de"))
+    end = time.perf_counter()
+    print("TS TIME ELAPSED:", end - start)
+
+    start = time.perf_counter()
+    print(scamadviser("chicladdy.com"))
+    end = time.perf_counter()
+    print("SA TIME ELAPSED:", end - start)
+
+    # start = time.perf_counter()
+    # print(virustotal("chicladdy.com"))
+    # end = time.perf_counter()
+    # print("VT TIME ELAPSED:", end - start)
+
+    start = time.perf_counter()
+    print(getsafeonline("chicladdy.com"))
+    end = time.perf_counter()
+    print("GSO TIME ELAPSED:", end - start)
+
+    start = time.perf_counter()
+    print(pagerank("chicladdy.com"))
+    end = time.perf_counter()
+    print("PR TIME ELAPSED:", end - start)
+
+    start = time.perf_counter()
+    print(urlvoid("chicladdy.com"))
+    end = time.perf_counter()
+    print("URLVOID TIME ELAPSED:", end - start)
